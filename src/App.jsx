@@ -10,6 +10,10 @@ import {
   Headphones,
   MessageSquare,
   Search,
+  Play,
+  Calendar,
+  Sparkle,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
@@ -74,6 +78,7 @@ export default function App() {
   const [message, setMessage] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { toast } = useToast();
+
 
   const [loading, setLoading] = useState(false);
   const [filteredSongs, setFilteredSongs] = useState([]);
@@ -290,14 +295,7 @@ export default function App() {
                   </h2>
                   <p className="text-lg text-gray-600">
                     Sent to {mostRecentSong.recipientName}:{" "}
-                    <a
-                      href={mostRecentSong.youtubeUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-green-600 hover:underline"
-                    >
-                      {mostRecentSong.youtubeUrl}
-                    </a>
+                    <YouTubePreview url={mostRecentSong.youtubeUrl} />
                   </p>
                 </div>
               ) : (
@@ -391,15 +389,8 @@ export default function App() {
                       <CardTitle className="text-xl font-bold text-gray-800">
                         Sent Song
                       </CardTitle>
-                      <CardDescription className="text-gray-600 font-medium">
-                        <a
-                          href={sentSong.youtubeUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-green-600 hover:underline"
-                        >
-                          {sentSong.youtubeUrl}
-                        </a>
+                      <CardDescription className="text-gray-600 font-medium pt-4">
+                        <YouTubePreview url={sentSong.youtubeUrl} />
                       </CardDescription>
                     </div>
                     <Avatar className="material-avatar bg-white text-green-600 h-12 w-12 ring-2 ring-green-200">
@@ -483,6 +474,91 @@ export default function App() {
       </footer>
 
       <Toaster />
+    </div>
+  );
+}
+
+function extractYouTubeID(url) {
+  if (!url) return null;
+  const regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/;
+  const match = url.match(regExp);
+  return (match && match[7]?.length === 11) ? match[7] : null;
+}
+
+async function fetchVideoTitle(videoId) {
+  try {
+    const apiKey = import.meta.env.VITE_YOUTUBE_API_KEY;
+    if (!apiKey) return null;
+    
+    const response = await fetch(
+      `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${apiKey}`
+    );
+    const data = await response.json();
+    
+    if (data.items && data.items.length > 0) {
+      return data.items[0].snippet.title;
+    }
+    return null;
+  } catch (error) {
+    console.error("Error fetching YouTube title:", error);
+    return null;
+  }
+}
+
+function YouTubePreview({ url }) {
+  const [title, setTitle] = useState("");
+  const [loading, setLoading] = useState(false);
+  const videoId = extractYouTubeID(url);
+  const [songTitles, setSongTitles] = useState({});
+  
+  useEffect(() => {
+    async function getTitle() {
+      if (!videoId) return;
+      
+      // Check if we already have the title cached
+      if (songTitles[videoId]) {
+        setTitle(songTitles[videoId]);
+        return;
+      }
+      
+      setLoading(true);
+      const videoTitle = await fetchVideoTitle(videoId);
+      setLoading(false);
+      
+      if (videoTitle) {
+        // Update the cached titles
+        setSongTitles(prev => ({...prev, [videoId]: videoTitle}));
+        setTitle(videoTitle);
+      }
+    }
+    
+    getTitle();
+  }, [videoId, songTitles]);
+  
+  if (!videoId) return <span className="text-green-600">{url}</span>;
+  
+  return (
+    <div className="flex items-center space-x-2">
+      <img 
+        src={`https://img.youtube.com/vi/${videoId}/default.jpg`} 
+        alt="Thumbnail" 
+        className="w-10 h-10 object-cover rounded"
+      />
+      <div>
+        <a 
+          href={url} 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="text-green-600 hover:underline flex items-center"
+        >
+          {loading ? (
+            <span className="animate-pulse bg-gray-200 h-4 w-32 rounded"></span>
+          ) : (
+            <span>{title || "YouTube Video"}</span>
+          )}
+          <ExternalLink className="h-3 w-3 ml-1" />
+        </a>
+      </div>
     </div>
   );
 }
